@@ -8,7 +8,7 @@ import {
   COLLECTION_FILES,
   QueryHelper,
   IDHelper,
-  BUCKET_ID
+  BUCKET_ID,
 } from "../utils/appwrite";
 import "./page.css";
 
@@ -16,6 +16,7 @@ export default function FolderView() {
   const { id } = useParams();
   const username = localStorage.getItem("username");
   const [files, setFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   useEffect(() => {
     fetchFiles();
@@ -25,7 +26,7 @@ export default function FolderView() {
     try {
       const result = await db.listDocuments(DB_ID, COLLECTION_FILES, [
         QueryHelper.equal("folderId", id),
-        QueryHelper.equal("owner", username)
+        QueryHelper.equal("owner", username),
       ]);
       setFiles(result.documents);
     } catch (error) {
@@ -49,7 +50,7 @@ export default function FolderView() {
         fileName: file.name,
         fileType: file.type || "unknown",
         folderId: id,
-        owner: username
+        owner: username,
       });
 
       fetchFiles();
@@ -58,16 +59,90 @@ export default function FolderView() {
     }
   };
 
-  const getFilePreview = (file) => {
+  const getFileThumbnail = (file) => {
     const fileType = file.fileType || "";
-    let fileUrl;
 
     try {
-      fileUrl = storage.getFileView(BUCKET_ID, file.fileId).href;
+      if (fileType.startsWith("image/")) {
+        const thumbUrl = storage
+          .getFilePreview(BUCKET_ID, file.fileId, 200, 150)
+          .toString();
+        return (
+          <img
+            src={thumbUrl}
+            alt={file.fileName}
+            style={{
+              width: "100%",
+              height: "150px",
+              objectFit: "cover",
+              borderRadius: "4px",
+            }}
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src =
+                "https://via.placeholder.com/200x150?text=No+Preview";
+            }}
+          />
+        );
+      } else if (fileType === "application/pdf") {
+        const pdfThumb = storage
+          .getFilePreview(BUCKET_ID, file.fileId, 200, 150)
+          .toString();
+        return (
+          <img
+            src={pdfThumb}
+            alt="PDF Preview"
+            style={{
+              width: "100%",
+              height: "150px",
+              objectFit: "cover",
+              borderRadius: "4px",
+            }}
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src =
+                "https://via.placeholder.com/200x150?text=PDF";
+            }}
+          />
+        );
+      } else {
+        return (
+          <div
+            style={{
+              height: "150px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "40px",
+              color: "#555",
+            }}
+          >
+            📄
+          </div>
+        );
+      }
     } catch (err) {
-      console.error("Error generating file URL:", err);
-      return null;
+      console.error("Thumbnail error:", err);
+      return (
+        <div
+          style={{
+            height: "150px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "40px",
+            color: "#999",
+          }}
+        >
+          ❌
+        </div>
+      );
     }
+  };
+
+  const getFileViewer = (file) => {
+    const fileType = file.fileType || "";
+    const fileUrl = storage.getFileView(BUCKET_ID, file.fileId).toString();
 
     if (fileType.startsWith("image/")) {
       return (
@@ -75,10 +150,9 @@ export default function FolderView() {
           src={fileUrl}
           alt={file.fileName}
           style={{
-            width: "100%",
-            height: "150px",
-            objectFit: "cover",
-            borderRadius: "4px"
+            maxWidth: "100%",
+            maxHeight: "80vh",
+            borderRadius: "8px",
           }}
         />
       );
@@ -88,36 +162,34 @@ export default function FolderView() {
           src={fileUrl}
           title={file.fileName}
           style={{
-            width: "100%",
-            height: "150px",
+            width: "80vw",
+            height: "80vh",
             border: "none",
-            borderRadius: "4px"
+            borderRadius: "8px",
           }}
         />
       );
     } else {
       return (
-        <div
+        <a
+          href={fileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
           style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            height: "150px",
-            backgroundColor: "#eee",
-            borderRadius: "4px"
+            fontSize: "16px",
+            color: "#007bff",
+            textDecoration: "underline",
           }}
         >
-          <span style={{ fontSize: "12px", color: "#555" }}>
-            📄 {file.fileName || "Unknown File"}
-          </span>
-        </div>
+          Download {file.fileName}
+        </a>
       );
     }
   };
 
   return (
     <div className="folder-view-container">
-      <h1 >Files</h1>
+      <h1>Files</h1>
 
       <div className="file-uploader-container">
         <label className="file-uploader">
@@ -135,7 +207,7 @@ export default function FolderView() {
           display: "grid",
           gridTemplateColumns: "repeat(auto-fill, minmax(200px, 1fr))",
           gap: "15px",
-          marginTop: "20px"
+          marginTop: "20px",
         }}
       >
         {files.map((file) => (
@@ -144,16 +216,18 @@ export default function FolderView() {
             style={{
               border: "1px solid #ddd",
               borderRadius: "6px",
-              padding: "10px"
+              padding: "10px",
+              cursor: "pointer",
             }}
+            onClick={() => setSelectedFile(file)}
           >
-            {getFilePreview(file)}
+            {getFileThumbnail(file)}
             <div
               style={{
                 marginTop: "10px",
                 fontSize: "12px",
                 textAlign: "center",
-                wordBreak: "break-word"
+                wordBreak: "break-word",
               }}
             >
               {file.fileName}
@@ -161,6 +235,45 @@ export default function FolderView() {
           </div>
         ))}
       </div>
+
+      {selectedFile && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0,0,0,0.8)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+        >
+          <div style={{ position: "relative" }}>
+            <button
+              onClick={() => setSelectedFile(null)}
+              style={{
+                position: "absolute",
+                top: "-40px",
+                right: "-40px",
+                background: "red",
+                color: "white",
+                border: "none",
+                borderRadius: "50%",
+                width: "35px",
+                height: "35px",
+                cursor: "pointer",
+                fontSize: "16px",
+              }}
+            >
+              ❌
+            </button>
+            {getFileViewer(selectedFile)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

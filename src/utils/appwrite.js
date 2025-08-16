@@ -11,7 +11,7 @@ export const IDHelper = ID;
 export const QueryHelper = Query;
 
 export const DB_ID = 
-export const COLLECTION_USERS = 
-export const COLLECTION_FOLDERS = 
-export const COLLECTION_FILES =
-export const BUCKET_ID = 
+export const COLLECTION_USERS = ""
+export const COLLECTION_FOLDERS ="" 
+export const COLLECTION_FILES =""
+export const BUCKET_ID = ""
